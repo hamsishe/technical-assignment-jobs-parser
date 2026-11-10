@@ -1,0 +1,20 @@
+[
+    {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "title": "Registered Nurse - Long Term Care",
+        "location": "Toronto, ON",
+        "description": "A 180-bed long term care residence is hiring registered nurses for its day and evening rotation. You will lead a care team of personal support workers, run medication passes, manage wound care and skin integrity, and be the first clinical judgement on any change in a resident's condition. Charting is done in an electronic record at the point of care. Families are present and involved, so clear, calm communication matters as much as clinical skill. We are a unionized site with a stable staffing ratio and a full orientation period for anyone new to long term care."
+    },
+    {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "title": "Senior Full Stack Engineer",
+        "location": "Remote - Canada",
+        "description": "We are a 30-person product team building tools for hospital staffing. You will own features end to end, from the database up through the screens people use every day. Our stack is TypeScript, React and Next.js on the front, Python and PostgreSQL behind it, all on AWS. You will work directly with two designers and a product manager, ship most weeks, and be on a light on-call rotation. We want someone who has carried a product past its first hundred customers and knows which corners are safe to cut. The team is distributed across Canada and overlaps on Eastern Time for the middle of the day."
+    },
+    {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "title": "Warehouse Associate - Night Shift",
+        "location": "Mississauga, ON",
+        "description": "Our distribution centre runs overnight to get orders onto trucks before the morning. As an associate you will pick and pack orders against a handheld scanner, break down incoming pallets, keep aisles clear and safe, and help load outbound trailers. The floor is busy and physical, and the pace holds steady through the shift. Training is paid and takes about a week. This is a permanent position with a shift premium, a benefits package after ninety days, and a clear path onto the equipment operator team for anyone who wants it."
+    }
+]

@@ -1,0 +1,272 @@
+[
+    {
+        "id": "8376cdca-71e7-9cc0-129e-a1ee40c25049",
+        "kind": "must_have",
+        "text": "5+ years building and shipping production web applications",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 1,
+        "source_quote": "carried a product past its first hundred customers"
+    },
+    {
+        "id": "8bfd779f-ca3f-c2d9-7490-58b57430f8d8",
+        "kind": "must_have",
+        "text": "Strong TypeScript and React experience",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 2,
+        "source_quote": "Our stack is TypeScript, React and Next.js on the front"
+    },
+    {
+        "id": "42cfd92f-4193-c7c8-151a-5224685ab64b",
+        "kind": "must_have",
+        "text": "Designs and queries relational databases, PostgreSQL preferred",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 3,
+        "source_quote": "Python and PostgreSQL behind it"
+    },
+    {
+        "id": "0a7f585b-4ca7-13b0-5951-ca718b34e368",
+        "kind": "must_have",
+        "text": "Must be a native English speaker",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 4,
+        "source_quote": null
+    },
+    {
+        "id": "b8ab451e-a146-d41a-de66-5a2d039deedb",
+        "kind": "must_have",
+        "text": "Available for the middle of the day on Eastern Time",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 5,
+        "source_quote": "overlaps on Eastern Time for the middle of the day"
+    },
+    {
+        "id": "6fbe0a9a-fcc2-beda-af51-7c8765f8d68d",
+        "kind": "must_have",
+        "text": "Bachelor's degree in Computer Science",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 6,
+        "source_quote": null
+    },
+    {
+        "id": "0cd4d82e-51e6-8e25-5a3b-b56f09aec9a8",
+        "kind": "must_have",
+        "text": "No employment gaps longer than six months",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 7,
+        "source_quote": null
+    },
+    {
+        "id": "5b5c7f04-ccde-7cc0-3ac0-658e1eb1d66b",
+        "kind": "nice_to_have",
+        "text": "Experience with Next.js or a comparable framework",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 8,
+        "source_quote": "Our stack is TypeScript, React and Next.js on the front"
+    },
+    {
+        "id": "1f72bc18-b45d-c026-e512-0f55fe4f5efd",
+        "kind": "nice_to_have",
+        "text": "Has worked at a company of under fifty people",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 9,
+        "source_quote": "We are a 30-person product team"
+    },
+    {
+        "id": "5df8b6df-448f-ee34-53e3-c524db5d2186",
+        "kind": "nice_to_have",
+        "text": "Comfortable being on a light on-call rotation",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "origin": "extracted",
+        "position": 10,
+        "source_quote": "be on a light on-call rotation"
+    },
+    {
+        "id": "cb38210e-e739-66c8-d061-be6d23202777",
+        "kind": "must_have",
+        "text": "Active RN licence with the College of Nurses of Ontario",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 1,
+        "source_quote": "hiring registered nurses"
+    },
+    {
+        "id": "60c26f3e-867f-3481-1b25-599b5e023e92",
+        "kind": "must_have",
+        "text": "2+ years in long term care or geriatrics",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 2,
+        "source_quote": null
+    },
+    {
+        "id": "b25f954d-64a3-4764-dfda-8079abbf3408",
+        "kind": "must_have",
+        "text": "Current CPR and BLS certification",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 3,
+        "source_quote": null
+    },
+    {
+        "id": "0c4dbe0b-5dcd-119f-3fbd-76da4dc8f6be",
+        "kind": "must_have",
+        "text": "Available for a rotating day and evening schedule",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 4,
+        "source_quote": "for its day and evening rotation"
+    },
+    {
+        "id": "e9996e5c-e147-018e-cdc4-25742ed90423",
+        "kind": "must_have",
+        "text": "Lives within a thirty minute drive of the residence",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 5,
+        "source_quote": null
+    },
+    {
+        "id": "fead8c7b-8fe5-20f9-0988-0ec7e74e6d90",
+        "kind": "must_have",
+        "text": "Confident with medication administration and wound care",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 6,
+        "source_quote": "run medication passes, manage wound care and skin integrity"
+    },
+    {
+        "id": "fbd21de1-9750-b83b-07c1-73926448db7f",
+        "kind": "must_have",
+        "text": "Clear vulnerable sector police check",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 7,
+        "source_quote": null
+    },
+    {
+        "id": "c05431e6-5076-599d-1a1e-6109af029f84",
+        "kind": "must_have",
+        "text": "Recent graduate, under two years since finishing school",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 8,
+        "source_quote": null
+    },
+    {
+        "id": "847c263e-cff5-268a-f31f-12e77c8601c1",
+        "kind": "nice_to_have",
+        "text": "Has charted in PointClickCare or a comparable record system",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 9,
+        "source_quote": "Charting is done in an electronic record at the point of care"
+    },
+    {
+        "id": "33fd5f94-94d5-2868-cc22-efb3a1015155",
+        "kind": "nice_to_have",
+        "text": "Speaks a second language used by residents",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 10,
+        "source_quote": null
+    },
+    {
+        "id": "cab8618c-ac21-ee11-dc42-2518109d5f06",
+        "kind": "nice_to_have",
+        "text": "Has mentored personal support workers or nursing students",
+        "job_id": "22222222-2222-4222-8222-222222222222",
+        "origin": "extracted",
+        "position": 11,
+        "source_quote": "lead a care team of personal support workers"
+    },
+    {
+        "id": "5abb2585-231f-ebe2-3b7e-3ffecf87bb1b",
+        "kind": "must_have",
+        "text": "Lifts up to fifty pounds repeatedly across an eight hour shift",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 1,
+        "source_quote": "The floor is busy and physical"
+    },
+    {
+        "id": "0209b3d1-0ec5-363c-b6d8-967a8aff1142",
+        "kind": "must_have",
+        "text": "Available Sunday through Thursday, 11pm to 7am",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 2,
+        "source_quote": "Our distribution centre runs overnight"
+    },
+    {
+        "id": "f61963ce-f62f-d490-7d58-d0a4142e932b",
+        "kind": "must_have",
+        "text": "Supplies their own steel toed safety boots",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 3,
+        "source_quote": null
+    },
+    {
+        "id": "0b096495-96f5-c9c5-ad9c-23461b9a5a1b",
+        "kind": "must_have",
+        "text": "Has their own reliable transportation",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 4,
+        "source_quote": null
+    },
+    {
+        "id": "e5d2e3f3-bc3e-1e23-ddd4-0281790c9708",
+        "kind": "must_have",
+        "text": "Reads and follows written safety instructions in English",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 5,
+        "source_quote": null
+    },
+    {
+        "id": "8f100797-8f1c-7713-e1f7-9185acbfb2c0",
+        "kind": "must_have",
+        "text": "High school diploma or equivalent",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 6,
+        "source_quote": null
+    },
+    {
+        "id": "6a608a44-0c53-a50e-7818-7ad10374cec0",
+        "kind": "nice_to_have",
+        "text": "Forklift certification",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 7,
+        "source_quote": "a clear path onto the equipment operator team"
+    },
+    {
+        "id": "08fd3ba6-5059-6290-bda3-ac3a54103888",
+        "kind": "nice_to_have",
+        "text": "Previous warehouse or distribution centre experience",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 8,
+        "source_quote": null
+    },
+    {
+        "id": "95c87e4b-998c-2ee3-f79d-8c410548bfd1",
+        "kind": "nice_to_have",
+        "text": "Has used a handheld scanner on a pick line",
+        "job_id": "33333333-3333-4333-8333-333333333333",
+        "origin": "extracted",
+        "position": 9,
+        "source_quote": "pick and pack orders against a handheld scanner"
+    }
+]

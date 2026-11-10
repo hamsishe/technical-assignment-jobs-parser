@@ -1,0 +1,7 @@
+{
+  "name": "take-home-starter",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}

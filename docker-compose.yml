@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: screening
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      # Everything in ./db runs once, in filename order, the first time the
+      # container starts. There is no named volume on purpose: `docker compose
+      # down` throws the data away, so you can always get back to a clean seed.
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d screening"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
