@@ -5,7 +5,18 @@ create table jobs (
     title text not null,
     location text not null,
     description text not null,
-    created_at timestamptz not null default now()
+    created_at timestamptz not null default now(),
+    -- last recruiter write to this job's requirements (add, edit, approve,
+    -- delete); null = never touched. Approving the job does not set it.
+    updated_at timestamptz,
+    -- set when the recruiter approves the job; null = not reviewed. Any later
+    -- requirement write clears it (and reviewed_by), so the job needs approving again.
+    reviewed_at timestamptz,
+    -- who approved the job; null exactly when reviewed_at is null
+    reviewed_by text,
+    constraint jobs_review_both_or_neither check (
+        (reviewed_at is null) = (reviewed_by is null)
+    )
 );
 
 create table requirements (
@@ -31,7 +42,17 @@ create table requirements (
     position integer not null,
     -- the phrase in the job description this requirement was taken from;
     -- null when the extractor found nothing in the text to base it on
-    source_quote text
+    source_quote text,
+    created_at timestamptz not null default now(),
+    -- time of the last write to this row. It is also the concurrency token: a
+    -- write must send back the value it read, or it is rejected as stale.
+    -- Writes set it with clock_timestamp(), so each write gets a later value.
+    updated_at timestamptz not null default now(),
+    -- recruiter who last wrote this row; null = untouched extraction
+    updated_by text,
+    -- set when a recruiter approves the requirement; null = not approved
+    reviewed_at timestamptz,
+    -- deferred, so a delete can shift the later rows up one in a single
+    -- transaction without tripping over each other
+    constraint requirements_job_position_key unique (job_id, position) deferrable initially deferred
 );
-
-create index requirements_job_position_idx on requirements (job_id, position);
