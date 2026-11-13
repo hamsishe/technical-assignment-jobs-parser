@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import FetchedValue, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 Kind = Literal["must_have", "nice_to_have"]
@@ -18,7 +18,8 @@ class Base(DeclarativeBase):
 class Job(Base):
     __tablename__ = "jobs"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    # Defaults to gen_random_uuid() in the database.
+    id: Mapped[UUID] = mapped_column(primary_key=True, server_default=FetchedValue())
     title: Mapped[str]
     location: Mapped[str]
     description: Mapped[str]
@@ -31,7 +32,8 @@ class Job(Base):
 class Requirement(Base):
     __tablename__ = "requirements"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    # Defaults to gen_random_uuid() in the database.
+    id: Mapped[UUID] = mapped_column(primary_key=True, server_default=FetchedValue())
     job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id"))
     text: Mapped[str]
     kind: Mapped[Kind] = mapped_column(String)

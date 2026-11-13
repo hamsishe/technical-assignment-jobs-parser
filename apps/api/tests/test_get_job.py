@@ -90,6 +90,7 @@ async def test_malformed_job_id_is_422(client: AsyncClient) -> None:
 
 
 async def test_get_needs_no_reviewer_header(client: AsyncClient) -> None:
+    client.headers.pop("X-Reviewer-Name")
     response = await client.get(f"/jobs/{NURSE_JOB_ID}")
 
     assert "X-Reviewer-Name" not in response.request.headers

@@ -33,8 +33,8 @@ target-version = "py312"
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "ASYNC", "RUF"]
 
 [tool.ruff.lint.isort]
-# Shared seed ids live next to the tests (tests/seed.py), imported as a top-level module.
-known-local-folder = ["seed"]
+# Test helpers live next to the tests (tests/seed.py, tests/helpers.py), imported as top-level modules.
+known-local-folder = ["seed", "helpers"]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's dependency-injection markers are meant to be used as defaults.

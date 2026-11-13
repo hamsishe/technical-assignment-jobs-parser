@@ -1,13 +1,19 @@
 """Reads and writes for job review, independent of HTTP."""
 
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from sqlalchemy import select
+from fastapi import status
+from sqlalchemy import exists, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from screening.review.errors import job_not_found
-from screening.review.models import Job, Requirement
+from screening.review.errors import api_error, job_not_found
+from screening.review.models import Job, Kind, Requirement
 from screening.review.schemas import JobOut, RequirementOut
+
+# A change to a job's requirements. Runs with the job row locked; returns whether it wrote
+# anything, so a no-op leaves the job's `updated_at` and review alone.
+RequirementChange = Callable[[Job], Awaitable[bool]]
 
 
 async def load_job_payload(session: AsyncSession, job_id: UUID) -> JobOut:
@@ -37,3 +43,91 @@ async def load_job_payload(session: AsyncSession, job_id: UUID) -> JobOut:
         reviewed_by=job.reviewed_by,
         requirements=[RequirementOut.model_validate(r) for r in requirements],
     )
+
+
+async def lock_job(session: AsyncSession, job_id: UUID) -> Job:
+    """Lock the job row for the rest of the transaction. Raises 404 if it is missing.
+
+    Every write takes this lock first, so writes to one job run one at a time: concurrent
+    adds cannot collide on position, and approving the job cannot race a requirement change.
+    """
+    job = await session.scalar(
+        select(Job)
+        .where(Job.id == job_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if job is None:
+        raise job_not_found()
+    return job
+
+
+async def write_requirements(
+    session: AsyncSession, job_id: UUID, change: RequirementChange
+) -> JobOut:
+    """Run one requirement write as a single transaction and return the new payload.
+
+    Locks the job, applies `change`, and if it wrote anything stamps `jobs.updated_at` (BR-2)
+    and clears the job's review (BR-4). Any error rolls the whole thing back.
+    """
+    try:
+        job = await lock_job(session, job_id)
+        if await change(job):
+            await session.execute(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(updated_at=func.clock_timestamp(), reviewed_at=None, reviewed_by=None)
+            )
+        payload = await load_job_payload(session, job_id)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    return payload
+
+
+async def ensure_unique_text(
+    session: AsyncSession, job_id: UUID, text: str, *, ignore_id: UUID | None = None
+) -> None:
+    """BR-10: no two requirements of a job share text, ignoring case and outer whitespace."""
+    same_text = (
+        select(Requirement.id)
+        .where(Requirement.job_id == job_id)
+        .where(func.lower(func.btrim(Requirement.text)) == func.lower(func.btrim(text)))
+    )
+    if ignore_id is not None:
+        same_text = same_text.where(Requirement.id != ignore_id)
+    if await session.scalar(select(exists(same_text))):
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "duplicate_text",
+            "This job already has a requirement with the same text.",
+        )
+
+
+def add_requirement(
+    session: AsyncSession, *, text: str, kind: Kind, reviewer: str
+) -> RequirementChange:
+    """New requirement: origin `added`, last position, approved on creation (BR-6/7/8)."""
+
+    async def change(job: Job) -> bool:
+        await ensure_unique_text(session, job.id, text)
+        next_position = select(func.coalesce(func.max(Requirement.position), 0) + 1).where(
+            Requirement.job_id == job.id
+        )
+        await session.execute(
+            insert(Requirement).values(
+                job_id=job.id,
+                text=text,
+                kind=kind,
+                origin="added",
+                position=next_position.scalar_subquery(),
+                created_at=func.clock_timestamp(),
+                updated_at=func.clock_timestamp(),
+                updated_by=reviewer,
+                reviewed_at=func.clock_timestamp(),
+            )
+        )
+        return True
+
+    return change
