@@ -30,6 +30,22 @@ open questions and time spent live in the atlas, not here:**
 Branches follow `CLAUDE.md`, using the task id as the ticket:
 `<type>/petro-rudenko/JR-<n>-<short-desc>`, PR title `<type>(<scope>): [JR-<n>] <summary>`.
 
+## Parallel sessions
+
+Each session works in its own git worktree next to the main checkout (e.g.
+`../ta-api`), so sessions never switch branches under each other.
+
+- Install with `uv sync --project apps/api && pnpm install`. **Never `just setup` in a
+  worktree.** Docker names the compose project after the folder, so it would try to start a
+  second database on port 55432.
+- All worktrees share the one database. Only the db/api lane resets it, and from its own
+  worktree as `COMPOSE_PROJECT_NAME=technical-assignment just reset`. That recreates the shared
+  database from that worktree's `db/*.sql`. Tell the other sessions in the atlas log first: API
+  tests in other worktrees fail while it restarts.
+- `just check` runs both apps' tests in every worktree, so every worktree needs both installs
+  and the database up.
+- Ports 3000 and 8000 are shared. Only one session runs `just dev` at a time.
+
 ## Lanes and order
 
 ```text
@@ -91,7 +107,9 @@ Branch `feat/petro-rudenko/JR-1-review-schema`. Depends on: none.
 JIT:
 
 - `clarify` Q3 (duplicate-text index) before writing the schema.
-- `destructive` `just reset` wipes the local DB. Confirm with the user, then run it.
+- `destructive` Reset wipes the local DB. Confirm with the user, log it in the atlas, then run
+  `COMPOSE_PROJECT_NAME=technical-assignment just reset` from this worktree (see Parallel
+  sessions).
 - `verify` After reset, `just psql` → `\d requirements` shows the new constraint.
 
 Done when: schema tests pass against a freshly reset DB.
