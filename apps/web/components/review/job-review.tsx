@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, getJob } from "@/lib/review/api";
 import {
   approveJobBlocker,
+  hasUnsavedWork,
   rowState,
   saveStatus,
   visibleRequirements,
@@ -19,6 +20,7 @@ import { AddRequirementForm } from "./add-requirement-form";
 import { ApproveJobButton } from "./approve-job-button";
 import { RequirementRow } from "./requirement-row";
 import { ReviewHeader } from "./review-header";
+import { useLeaveGuard } from "./use-leave-guard";
 import { useReviewStore } from "./use-review-store";
 
 type LoadState =
@@ -87,6 +89,9 @@ export function JobReview({ jobId }: { jobId: string }) {
 
 function ReviewPage({ initialJob }: { initialJob: Job }) {
   const [state, store] = useReviewStore(initialJob);
+  const [addFormHasText, setAddFormHasText] = useState(false);
+  // UC5/UC7: warn before leaving while anything typed or sent is not safely saved.
+  useLeaveGuard(addFormHasText || hasUnsavedWork(state));
   const { job } = state;
   const requirements = visibleRequirements(state);
   const approved = requirements.filter((r) => r.approved).length;
@@ -127,7 +132,7 @@ function ReviewPage({ initialJob }: { initialJob: Job }) {
               </li>
             ))}
           </ol>
-          <AddRequirementForm add={store.add} />
+          <AddRequirementForm add={store.add} onTextChange={setAddFormHasText} />
         </section>
       </main>
 
