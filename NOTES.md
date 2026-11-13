@@ -29,7 +29,9 @@ Why the schema changed, per the Job Review spec (§4):
   rolled back; the app session joins it with `join_transaction_mode="create_savepoint"`. Locks,
   deferred constraints and check constraints behave as in production, and no test data is left
   behind. `just check` therefore needs `docker compose up -d`. Each request gets its own session
-  on the test's connection, so an API rollback never undoes a test's setup.
+  on the test's connection, so an API rollback never undoes a test's setup. The tests assume the
+  seed as loaded; if the database has been written to (e.g. by using the app), the run stops up
+  front and asks for `just reset`.
 - **One write path.** Every requirement write goes through `write_requirements` in
   `screening/review/service.py`: lock the job row (`select … for update`), apply the change, stamp
   `jobs.updated_at` and clear the job review, read the payload, commit. Writes to one job are
