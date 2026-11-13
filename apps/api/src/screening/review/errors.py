@@ -19,3 +19,15 @@ def api_error(status_code: int, code: ErrorCode, message: str) -> HTTPException:
 
 def job_not_found() -> HTTPException:
     return api_error(status.HTTP_404_NOT_FOUND, "not_found", "Job not found.")
+
+
+def requirement_not_found() -> HTTPException:
+    return api_error(status.HTTP_404_NOT_FOUND, "not_found", "Requirement not found.")
+
+
+def stale_requirement() -> HTTPException:
+    return api_error(
+        status.HTTP_409_CONFLICT,
+        "stale",
+        "This requirement was changed elsewhere. Reload to see the latest version.",
+    )

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import AwareDatetime, BaseModel, ConfigDict, StringConstraints, model_validator
 
 from screening.review.models import Kind, Origin
 
@@ -26,6 +26,32 @@ class RequirementCreate(BaseModel):
 
     text: RequirementText
     kind: Kind = "must_have"
+
+
+class RequirementPatch(BaseModel):
+    """PATCH body: a change to text, kind and/or approval, against the version the client read.
+
+    Fields left out are unchanged. Explicit nulls are rejected rather than read as "unchanged".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # The requirement's `updated_at` as the client last read it (BR-12). Must carry an offset,
+    # since it is compared with the stored instant.
+    expected_updated_at: AwareDatetime
+    text: RequirementText | None = None
+    kind: Kind | None = None
+    approved: bool | None = None
+
+    @model_validator(mode="after")
+    def changes_something(self) -> "RequirementPatch":
+        changes = self.model_fields_set & {"text", "kind", "approved"}
+        if not changes:
+            raise ValueError("Send at least one of text, kind or approved.")
+        nulls = sorted(name for name in changes if getattr(self, name) is None)
+        if nulls:
+            raise ValueError(f"{', '.join(nulls)} cannot be null.")
+        return self
 
 
 class RequirementOut(BaseModel):

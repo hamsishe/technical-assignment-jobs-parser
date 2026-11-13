@@ -1,15 +1,22 @@
 """Reads and writes for job review, independent of HTTP."""
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import status
 from sqlalchemy import exists, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from screening.review.errors import api_error, job_not_found
+from screening.review.errors import (
+    api_error,
+    job_not_found,
+    requirement_not_found,
+    stale_requirement,
+)
 from screening.review.models import Job, Kind, Requirement
-from screening.review.schemas import JobOut, RequirementOut
+from screening.review.schemas import JobOut, RequirementOut, RequirementPatch
 
 # A change to a job's requirements. Runs with the job row locked; returns whether it wrote
 # anything, so a no-op leaves the job's `updated_at` and review alone.
@@ -127,6 +134,65 @@ def add_requirement(
                 updated_by=reviewer,
                 reviewed_at=func.clock_timestamp(),
             )
+        )
+        return True
+
+    return change
+
+
+async def load_current_requirement(
+    session: AsyncSession, job: Job, requirement_id: UUID, expected_updated_at: datetime
+) -> Requirement:
+    """The requirement as the client must have last seen it. Call under the job lock.
+
+    404 if it does not exist or belongs to another job; 409 `stale` if it changed since the
+    client read it (BR-12). The token is compared exactly: writes stamp `clock_timestamp()`,
+    so every write moves it forward.
+    """
+    requirement = await session.scalar(
+        select(Requirement)
+        .where(Requirement.id == requirement_id, Requirement.job_id == job.id)
+        .execution_options(populate_existing=True)
+    )
+    if requirement is None:
+        raise requirement_not_found()
+    if requirement.updated_at != expected_updated_at:
+        raise stale_requirement()
+    return requirement
+
+
+def patch_requirement(
+    session: AsyncSession, requirement_id: UUID, patch: RequirementPatch, *, reviewer: str
+) -> RequirementChange:
+    """Edit text and/or kind, approve or unapprove. A patch that changes nothing is a no-op (Q1).
+
+    - Text change on an `extracted` row makes it `edited`; other origins stay (BR-6).
+    - Text or kind edits keep approval; only `approved` sets or clears it (BR-8).
+    - `source_quote` is never touched (BR-11).
+    """
+
+    async def change(job: Job) -> bool:
+        current = await load_current_requirement(
+            session, job, requirement_id, patch.expected_updated_at
+        )
+        values: dict[str, Any] = {}
+        if patch.text is not None and patch.text != current.text:
+            await ensure_unique_text(session, job.id, patch.text, ignore_id=current.id)
+            values["text"] = patch.text
+            if current.origin == "extracted":
+                values["origin"] = "edited"
+        if patch.kind is not None and patch.kind != current.kind:
+            values["kind"] = patch.kind
+        if patch.approved is True and current.reviewed_at is None:
+            values["reviewed_at"] = func.clock_timestamp()
+        if patch.approved is False and current.reviewed_at is not None:
+            values["reviewed_at"] = None
+        if not values:
+            return False
+        await session.execute(
+            update(Requirement)
+            .where(Requirement.id == current.id)
+            .values(**values, updated_at=func.clock_timestamp(), updated_by=reviewer)
         )
         return True
 

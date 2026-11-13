@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from screening.db import get_session
 from screening.review import service
 from screening.review.dependencies import reviewer_name
-from screening.review.schemas import JobOut, RequirementCreate
+from screening.review.schemas import JobOut, RequirementCreate, RequirementPatch
 
 router = APIRouter(prefix="/jobs", tags=["job review"])
 
@@ -26,4 +26,16 @@ async def add_requirement(
     session: AsyncSession = Depends(get_session),
 ) -> JobOut:
     change = service.add_requirement(session, text=body.text, kind=body.kind, reviewer=reviewer)
+    return await service.write_requirements(session, job_id, change)
+
+
+@router.patch("/{job_id}/requirements/{requirement_id}")
+async def patch_requirement(
+    job_id: UUID,
+    requirement_id: UUID,
+    body: RequirementPatch,
+    reviewer: str = Depends(reviewer_name),
+    session: AsyncSession = Depends(get_session),
+) -> JobOut:
+    change = service.patch_requirement(session, requirement_id, body, reviewer=reviewer)
     return await service.write_requirements(session, job_id, change)

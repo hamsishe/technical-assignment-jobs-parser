@@ -3,6 +3,7 @@
 from typing import Any
 from uuid import UUID
 
+from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,3 +35,15 @@ async def mark_job_reviewed(session: AsyncSession, job_id: UUID) -> None:
         {"job": job_id},
     )
     await session.commit()
+
+
+async def api_requirements(client: AsyncClient, job_id: UUID) -> list[dict[str, Any]]:
+    """Requirements as the client sees them, with `updated_at` as the exact token string."""
+    response = await client.get(f"/jobs/{job_id}")
+    assert response.status_code == 200
+    requirements: list[dict[str, Any]] = response.json()["requirements"]
+    return requirements
+
+
+def find(job: dict[str, Any], requirement_id: str) -> dict[str, Any]:
+    return next(r for r in job["requirements"] if r["id"] == requirement_id)
