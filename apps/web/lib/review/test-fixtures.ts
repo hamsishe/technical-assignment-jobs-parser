@@ -48,3 +48,28 @@ export function jsonResponse(body: unknown, status = 200): Response {
 export function errorResponse(status: number, code: string, message = code): Response {
   return jsonResponse({ detail: { code, message } }, status);
 }
+
+/** The payload the API returns after a write: the job stamped `at`, with `changes` applied. */
+export function withChange(job: Job, at: string, id: string, changes: Partial<Requirement>): Job {
+  return {
+    ...job,
+    updated_at: at,
+    requirements: job.requirements.map((r) =>
+      r.id === id ? { ...r, ...changes, updated_at: at } : r,
+    ),
+  };
+}
+
+/** The payload after a delete: the row gone and later positions shifted up (BR-7). */
+export function withoutRequirement(job: Job, at: string, id: string): Job {
+  const removed = job.requirements.find((r) => r.id === id);
+  return {
+    ...job,
+    updated_at: at,
+    requirements: job.requirements
+      .filter((r) => r.id !== id)
+      .map((r) =>
+        removed !== undefined && r.position > removed.position ? { ...r, position: r.position - 1 } : r,
+      ),
+  };
+}

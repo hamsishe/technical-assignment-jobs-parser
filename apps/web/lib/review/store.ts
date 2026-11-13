@@ -6,18 +6,26 @@
 // synchronously when the next request leaves. React state seen through a ref lags a
 // commit, and a lagging token turns a chained edit into a 409.
 
-import { ApiError, getJob, isTransient, patchRequirement } from "./api";
+import { ApiError, deleteRequirement, getJob, isTransient, patchRequirement } from "./api";
 import { notify } from "./notify";
-import type { Job, Requirement } from "./types";
+import type { Job, Kind, Requirement, RequirementChanges } from "./types";
 
 export const MAX_TEXT_LENGTH = 500;
 
-/** Why the last save of a row's text did not land (the row keeps its draft). */
+/** Why the last save of a row did not land. */
 export type RowFailure =
-  /** Network error or 5xx: "Not saved · Retry". */
+  /** Network error or 5xx on a text save: the text is kept, "Not saved · Retry". */
   | "transient"
-  /** 409 stale or 404: someone else changed or deleted it. Cleared by a reload. */
+  /** 409 stale or 404: someone else changed or deleted it. Cleared by a reload (Q5). */
   | "stale";
+
+/** What the UI shows before the server confirms: kind, approval and delete (spec §6). */
+export interface Overlay {
+  op: number;
+  kind?: Kind;
+  approved?: boolean;
+  deleted?: boolean;
+}
 
 export interface RowState {
   /** Text in the input that is not saved yet; null when the input shows the server text. */
@@ -27,6 +35,9 @@ export interface RowState {
   failure: RowFailure | null;
   /** Requests queued or in flight for this row. */
   pending: number;
+  /** The text the latest queued text save sends, while requests are pending. */
+  sentText: string | null;
+  overlays: readonly Overlay[];
 }
 
 export type RowStatus = "idle" | "saving" | "failed" | "invalid";
@@ -39,13 +50,21 @@ export interface ReviewState {
 export type Action =
   | { type: "payload"; job: Job }
   | { type: "draft"; id: string; text: string }
+  | { type: "discard"; id: string }
   | { type: "invalid"; id: string; message: string }
-  | { type: "sent"; id: string }
-  | { type: "saved"; id: string; job: Job; text?: string }
-  | { type: "failed"; id: string; failure?: RowFailure; error?: string }
+  | { type: "sent"; id: string; op: number; text?: string; overlay?: Omit<Overlay, "op"> }
+  | { type: "saved"; id: string; op: number; job: Job; text?: string }
+  | { type: "failed"; id: string; op: number; text?: string; failure?: RowFailure; error?: string }
   | { type: "reloaded"; job: Job };
 
-const EMPTY_ROW: RowState = { draft: null, error: null, failure: null, pending: 0 };
+const EMPTY_ROW: RowState = {
+  draft: null,
+  error: null,
+  failure: null,
+  pending: 0,
+  sentText: null,
+  overlays: [],
+};
 
 export function initialState(job: Job): ReviewState {
   return { job, rows: {} };
@@ -62,13 +81,22 @@ export function reduce(state: ReviewState, action: Action): ReviewState {
 
     case "draft": {
       const row = rowState(state, action.id);
-      const server = findRequirement(state.job, action.id);
-      // Typing back to the saved text is not a draft, unless a save is still on its way
-      // (then the server text is about to change, and this text must be sent too).
-      const draft = server?.text === action.text && row.pending === 0 ? null : action.text;
+      // Typing back to the text the server has (or is about to have) is not a draft.
+      const draft = action.text === expectedText(state, action.id) ? null : action.text;
       // Once a message is showing, keep it current as the user types.
       const error = row.error === null || draft === null ? null : validateText(draft);
       return withRow(state, action.id, { ...row, draft, error });
+    }
+
+    case "discard": {
+      // Escape: back to the saved text, so nothing about the text is left unsaved.
+      const row = rowState(state, action.id);
+      return withRow(state, action.id, {
+        ...row,
+        draft: null,
+        error: null,
+        failure: row.failure === "transient" ? null : row.failure,
+      });
     }
 
     case "invalid":
@@ -76,48 +104,61 @@ export function reduce(state: ReviewState, action: Action): ReviewState {
 
     case "sent": {
       const row = rowState(state, action.id);
+      const sendsText = action.text !== undefined;
       return withRow(state, action.id, {
         ...row,
-        error: null,
-        failure: null,
+        // A new text save replaces the outcome of the last one.
+        error: sendsText ? null : row.error,
+        failure: sendsText ? null : row.failure,
         pending: row.pending + 1,
+        sentText: action.text ?? row.sentText,
+        overlays: action.overlay ? [...row.overlays, { ...action.overlay, op: action.op }] : row.overlays,
       });
     }
 
     case "saved": {
-      const row = rowState(state, action.id);
+      const row = settled(rowState(state, action.id), action.op);
       // The draft is done only if it still says what was saved; the user may have typed on.
       const draftSaved =
         action.text !== undefined && row.draft !== null && row.draft.trim() === action.text;
       const next = { ...state, job: newer(state.job, action.job) };
-      return withRow(next, action.id, {
-        ...row,
-        draft: draftSaved ? null : row.draft,
-        pending: row.pending - 1,
-      });
+      return withRow(next, action.id, { ...row, draft: draftSaved ? null : row.draft });
     }
 
     case "failed": {
-      const row = rowState(state, action.id);
+      const row = settled(rowState(state, action.id), action.op);
       return withRow(state, action.id, {
         ...row,
-        pending: row.pending - 1,
+        // Never lose the text silently: if the user typed back meanwhile, restore what failed.
+        draft: row.draft ?? action.text ?? null,
         failure: action.failure ?? row.failure,
         error: action.error ?? row.error,
       });
     }
 
     case "reloaded": {
-      // A reload is the answer to "changed elsewhere": the conflict has been seen.
+      // Q5: a reload answers "changed elsewhere". The conflicting row drops its draft and
+      // shows the other version; every other row keeps its draft.
       const rows = Object.fromEntries(
         Object.entries(state.rows).map(([id, row]) => [
           id,
-          row.failure === "stale" ? { ...row, failure: null } : row,
+          row.failure === "stale" ? { ...row, draft: null, error: null, failure: null } : row,
         ]),
       );
       return { job: newer(state.job, action.job), rows };
     }
   }
+}
+
+/** One request settled: drop its overlay (revert on failure, server state on success). */
+function settled(row: RowState, op: number): RowState {
+  const pending = row.pending - 1;
+  return {
+    ...row,
+    pending,
+    sentText: pending === 0 ? null : row.sentText,
+    overlays: row.overlays.filter((o) => o.op !== op),
+  };
 }
 
 function withRow(state: ReviewState, id: string, row: RowState): ReviewState {
@@ -126,6 +167,13 @@ function withRow(state: ReviewState, id: string, row: RowState): ReviewState {
 
 function findRequirement(job: Job, id: string): Requirement | undefined {
   return job.requirements.find((r) => r.id === id);
+}
+
+/** The text the server will hold once queued requests land. */
+function expectedText(state: ReviewState, id: string): string | undefined {
+  const row = rowState(state, id);
+  if (row.pending > 0 && row.sentText !== null) return row.sentText;
+  return findRequirement(state.job, id)?.text;
 }
 
 /**
@@ -180,6 +228,26 @@ export function rowStatus(row: RowState): RowStatus {
   return "idle";
 }
 
+/** A requirement as the user sees it: the server row with unconfirmed changes applied. */
+export interface RequirementView extends Requirement {
+  approved: boolean;
+}
+
+/** Requirements as the user should see them: overlays applied, deletes hidden, in order. */
+export function visibleRequirements(state: ReviewState): RequirementView[] {
+  return state.job.requirements
+    .flatMap((requirement) => {
+      let shown: RequirementView = { ...requirement, approved: requirement.reviewed_at !== null };
+      for (const overlay of rowState(state, requirement.id).overlays) {
+        if (overlay.deleted) return [];
+        if (overlay.kind !== undefined) shown = { ...shown, kind: overlay.kind };
+        if (overlay.approved !== undefined) shown = { ...shown, approved: overlay.approved };
+      }
+      return [shown];
+    })
+    .sort((a, b) => a.position - b.position);
+}
+
 export type SaveStatus =
   | { kind: "saving" }
   | { kind: "saved" }
@@ -215,9 +283,19 @@ function currentRows(state: ReviewState): RowState[] {
 
 export type ReviewStore = ReturnType<typeof createReviewStore>;
 
+interface Operation {
+  request: (token: string) => Promise<Job>;
+  /** The text this request saves, if any (it then owns the row's draft outcome). */
+  text?: string;
+  overlay?: Omit<Overlay, "op">;
+  /** Runs the same user action again, from the snackbar. */
+  retry: () => void;
+}
+
 export function createReviewStore(initialJob: Job) {
   const jobId = initialJob.id;
   let state = initialState(initialJob);
+  let nextOp = 1;
   const listeners = new Set<() => void>();
   const queues = new Map<string, Promise<void>>();
 
@@ -227,25 +305,28 @@ export function createReviewStore(initialJob: Job) {
   }
 
   /**
-   * Run `request` after every earlier request for the same requirement has settled, with
-   * the token current at that moment: the previous response's, or a newer payload's.
+   * Run the request after every earlier request for the same requirement has settled,
+   * with the token current at that moment: the previous response's, or a newer payload's.
    */
-  function enqueue(id: string, request: (token: string) => Promise<Job>, savedText?: string) {
-    dispatch({ type: "sent", id });
+  function enqueue(id: string, operation: Operation) {
+    const op = nextOp++;
+    const { text } = operation;
+    dispatch({ type: "sent", id, op, text, overlay: operation.overlay });
+
     const previous = queues.get(id) ?? Promise.resolve();
     const current = previous.then(async () => {
       const token = findRequirement(state.job, id)?.updated_at;
       if (token === undefined) {
         // Deleted, here or elsewhere, while this request waited its turn.
-        fail(id, new ApiError(404, "not_found", "This requirement no longer exists."));
+        fail(id, op, operation, new ApiError(404, "not_found", "This requirement no longer exists."));
         return;
       }
       try {
-        const job = await request(token);
-        dispatch({ type: "saved", id, job, text: savedText });
+        const job = await operation.request(token);
+        dispatch({ type: "saved", id, op, job, text });
         notify.dismiss(toastId(id));
       } catch (error) {
-        fail(id, error);
+        fail(id, op, operation, error);
       }
     });
     queues.set(id, current);
@@ -254,24 +335,45 @@ export function createReviewStore(initialJob: Job) {
     });
   }
 
-  function fail(id: string, error: unknown) {
+  function fail(id: string, op: number, operation: Operation, error: unknown) {
+    const { text } = operation;
     if (isTransient(error)) {
-      dispatch({ type: "failed", id, failure: "transient" });
+      // A text save keeps its text and marks the row; kind, approve and delete revert.
+      dispatch({ type: "failed", id, op, text, failure: text === undefined ? undefined : "transient" });
       notify.error("Couldn't save. Check your connection.", {
         id: toastId(id),
-        action: { label: "Retry", onClick: () => store.saveText(id) },
+        action: { label: "Retry", onClick: operation.retry },
       });
     } else if (error instanceof ApiError && (error.code === "stale" || error.code === "not_found")) {
-      dispatch({ type: "failed", id, failure: "stale" });
+      dispatch({ type: "failed", id, op, text, failure: "stale" });
       notify.error("This requirement was changed elsewhere", {
         id: toastId(id),
         action: { label: "Reload", onClick: () => void store.reload() },
       });
     } else {
-      // A business rule or validation answer (409 duplicate_text, 422): shown on the row.
+      // A business rule or validation answer (409 duplicate_text, 422): no retry.
       const message = error instanceof Error ? error.message : "Couldn't save.";
-      dispatch({ type: "failed", id, error: message });
+      if (text !== undefined) {
+        dispatch({ type: "failed", id, op, text, error: message }); // shown on the row
+      } else {
+        dispatch({ type: "failed", id, op });
+        notify.error(message, { id: toastId(id) });
+      }
     }
+  }
+
+  /** The valid, changed draft to save, `null` if there is nothing to save, or the message. */
+  function draftToSave(id: string): { text: string | null } | { error: string } {
+    const { draft } = rowState(state, id);
+    if (draft === null) return { text: null };
+    const error = validateText(draft);
+    if (error !== null) return { error };
+    const text = draft.trim();
+    return { text: text === expectedText(state, id) ? null : text };
+  }
+
+  function patch(id: string, changes: RequirementChanges) {
+    return (token: string) => patchRequirement(jobId, id, token, changes);
   }
 
   const store = {
@@ -288,27 +390,66 @@ export function createReviewStore(initialJob: Job) {
       dispatch({ type: "draft", id, text });
     },
 
-    /** Blur / Enter / Retry: save the row's draft if it is valid and changed. */
-    saveText(id: string) {
-      const row = rowState(state, id);
-      const server = findRequirement(state.job, id);
-      if (server === undefined || row.draft === null) return;
-
-      const error = validateText(row.draft);
-      if (error !== null) {
-        dispatch({ type: "invalid", id, message: error });
-        return;
-      }
-      const text = row.draft.trim();
-      if (text === server.text && row.pending === 0) {
-        // Only whitespace changed: nothing to save (BR-6).
-        dispatch({ type: "draft", id, text: server.text });
-        return;
-      }
-      enqueue(id, (token) => patchRequirement(jobId, id, token, { text }), text);
+    /** Escape: restore the last saved text. */
+    discardDraft(id: string) {
+      dispatch({ type: "discard", id });
     },
 
-    /** Refetch the job. Rows keep their drafts. */
+    /** Blur / Enter / Retry: save the row's draft if it is valid and changed. */
+    saveText(id: string) {
+      // Changed elsewhere: resending with the same token can only fail again. The row
+      // waits for Reload (Q5), which brings a fresh token.
+      if (rowState(state, id).failure === "stale") return;
+      const result = draftToSave(id);
+      if ("error" in result) {
+        dispatch({ type: "invalid", id, message: result.error });
+        return;
+      }
+      const { text } = result;
+      if (text === null) {
+        // Unchanged, or only whitespace changed: nothing to save (BR-6).
+        if (rowState(state, id).draft !== null) dispatch({ type: "discard", id });
+        return;
+      }
+      enqueue(id, { request: patch(id, { text }), text, retry: () => store.saveText(id) });
+    },
+
+    /** Optimistic; reverts with a snackbar if it fails. Approval is unchanged (BR-8). */
+    changeKind(id: string, kind: Kind) {
+      enqueue(id, {
+        request: patch(id, { kind }),
+        overlay: { kind },
+        retry: () => store.changeKind(id, kind),
+      });
+    },
+
+    /** Approve, with the row's pending valid text in the same request. */
+    approve(id: string) {
+      const result = draftToSave(id);
+      if ("error" in result) {
+        // Q4: an invalid draft blocks Approve; the inline message says why.
+        dispatch({ type: "invalid", id, message: result.error });
+        return;
+      }
+      const text = result.text ?? undefined;
+      enqueue(id, {
+        request: patch(id, text === undefined ? { approved: true } : { approved: true, text }),
+        text,
+        overlay: { approved: true },
+        retry: () => store.approve(id),
+      });
+    },
+
+    /** Permanent. Hidden at once; comes back with a snackbar if the delete fails. */
+    remove(id: string) {
+      enqueue(id, {
+        request: (token) => deleteRequirement(jobId, id, token),
+        overlay: { deleted: true },
+        retry: () => store.remove(id),
+      });
+    },
+
+    /** Refetch the job (Q5: the conflicting row drops its draft, other rows keep theirs). */
     async reload() {
       try {
         dispatch({ type: "reloaded", job: await getJob(jobId) });

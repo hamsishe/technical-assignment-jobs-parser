@@ -10,8 +10,14 @@ import {
   saveStatus,
   validateText,
 } from "./store";
-import { JOB_ID, errorResponse, jsonResponse, makeJob, makeRequirement } from "./test-fixtures";
-import type { Job, Requirement } from "./types";
+import {
+  JOB_ID,
+  errorResponse,
+  jsonResponse,
+  makeJob,
+  makeRequirement,
+  withChange as written,
+} from "./test-fixtures";
 
 const T0 = "2026-11-13T10:00:00Z";
 const T1 = "2026-11-13T10:00:01.000001Z";
@@ -55,17 +61,6 @@ function setup() {
   const b = makeRequirement({ position: 2, text: "Beta", updated_at: T0 });
   const job = makeJob({ updated_at: T0, requirements: [a, b] });
   return { a, b, job, store: createReviewStore(job) };
-}
-
-/** The payload the API returns after a write: the job stamped `at`, with `changes` applied. */
-function written(job: Job, at: string, id: string, changes: Partial<Requirement>): Job {
-  return {
-    ...job,
-    updated_at: at,
-    requirements: job.requirements.map((r) =>
-      r.id === id ? { ...r, ...changes, updated_at: at } : r,
-    ),
-  };
 }
 
 const settle = () => vi.waitFor(() => Promise.resolve());
@@ -306,4 +301,21 @@ test("a job id is part of every write path", async () => {
 
   expect(api.fetchMock.mock.calls[0][0]).toBe(`/api/jobs/${JOB_ID}/requirements/${a.id}`);
   expect(api.fetchMock.mock.calls[0][1]?.method).toBe("PATCH");
+});
+
+test("a stale row does not resend on blur; it waits for Reload", async () => {
+  const { a, store } = setup();
+  const api = controlledFetch();
+
+  store.setDraft(a.id, "Alpha 2");
+  store.saveText(a.id);
+  await settle();
+  api.respond(0, errorResponse(409, "stale"));
+  await vi.waitFor(() => expect(rowState(store.getState(), a.id).failure).toBe("stale"));
+
+  store.saveText(a.id);
+  await settle();
+
+  expect(api.fetchMock).toHaveBeenCalledOnce();
+  expect(rowState(store.getState(), a.id).draft).toBe("Alpha 2");
 });

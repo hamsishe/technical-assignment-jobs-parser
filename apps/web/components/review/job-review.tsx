@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, getJob } from "@/lib/review/api";
-import { saveStatus } from "@/lib/review/store";
+import { rowState, saveStatus, visibleRequirements } from "@/lib/review/store";
 import type { Job } from "@/lib/review/types";
 
 import { RequirementRow } from "./requirement-row";
@@ -79,10 +79,10 @@ export function JobReview({ jobId }: { jobId: string }) {
 }
 
 function ReviewPage({ initialJob }: { initialJob: Job }) {
-  const [state] = useReviewStore(initialJob);
+  const [state, store] = useReviewStore(initialJob);
   const { job } = state;
-  const requirements = job.requirements.toSorted((a, b) => a.position - b.position);
-  const approved = requirements.filter((r) => r.reviewed_at !== null).length;
+  const requirements = visibleRequirements(state);
+  const approved = requirements.filter((r) => r.approved).length;
   const progress = `${approved} of ${requirements.length} approved`;
 
   return (
@@ -104,7 +104,11 @@ function ReviewPage({ initialJob }: { initialJob: Job }) {
           <ol className="flex flex-col gap-3">
             {requirements.map((requirement) => (
               <li key={requirement.id}>
-                <RequirementRow requirement={requirement} />
+                <RequirementRow
+                  requirement={requirement}
+                  row={rowState(state, requirement.id)}
+                  actions={store}
+                />
               </li>
             ))}
           </ol>
