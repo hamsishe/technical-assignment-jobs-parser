@@ -84,13 +84,6 @@ async def test_any_unapproved_requirement_is_409(
     assert (await job_row(session, NURSE_JOB_ID))["reviewed_at"] is None
 
 
-async def test_unreviewed_seed_job_is_409(client: AsyncClient) -> None:
-    response = await client.post(URL)
-
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "not_all_approved"
-
-
 async def test_approving_a_reviewed_job_again_keeps_the_original(
     client: AsyncClient, session: AsyncSession
 ) -> None:

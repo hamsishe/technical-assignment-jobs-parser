@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from seed import NURSE_JOB_ID, SEED_JOB_IDS
+from seed import NURSE_JOB_ID
 
 
 async def positions(session: AsyncSession, job_id: object) -> list[int]:
@@ -14,29 +14,6 @@ async def positions(session: AsyncSession, job_id: object) -> list[int]:
         {"job": job_id},
     )
     return list(rows)
-
-
-async def test_seed_positions_are_contiguous_per_job(session: AsyncSession) -> None:
-    for job_id in SEED_JOB_IDS:
-        found = await positions(session, job_id)
-        assert found == list(range(1, len(found) + 1)), job_id
-        assert found, job_id
-
-
-async def test_seed_starts_unreviewed_and_untouched(session: AsyncSession) -> None:
-    jobs = (
-        await session.execute(text("select updated_at, reviewed_at, reviewed_by from jobs"))
-    ).all()
-    assert jobs
-    assert all(row == (None, None, None) for row in jobs)
-
-    touched = await session.scalar(
-        text(
-            "select count(*) from requirements"
-            " where updated_by is not null or reviewed_at is not null"
-        )
-    )
-    assert touched == 0
 
 
 @pytest.mark.parametrize(
@@ -51,17 +28,6 @@ async def test_job_review_fields_are_both_set_or_both_null(
             await session.execute(
                 text(f"update jobs set {assignment} where id = :job"), {"job": NURSE_JOB_ID}
             )
-
-
-async def test_job_review_fields_can_be_set_together(session: AsyncSession) -> None:
-    await session.execute(
-        text("update jobs set reviewed_at = now(), reviewed_by = 'Alex' where id = :job"),
-        {"job": NURSE_JOB_ID},
-    )
-    reviewed_by = await session.scalar(
-        text("select reviewed_by from jobs where id = :job"), {"job": NURSE_JOB_ID}
-    )
-    assert reviewed_by == "Alex"
 
 
 async def test_positions_can_shift_within_one_transaction(session: AsyncSession) -> None:

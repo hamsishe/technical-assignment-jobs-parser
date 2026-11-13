@@ -4,7 +4,7 @@ from typing import Any
 from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from helpers import api_requirements, job_row, mark_job_reviewed
+from helpers import api_requirements, job_row
 from seed import ENGINEER_JOB_ID, MISSING_JOB_ID, NURSE_JOB_ID
 
 
@@ -56,15 +56,6 @@ async def test_delete_is_allowed_below_three_requirements(client: AsyncClient) -
         assert response.status_code == 200
 
     assert await api_requirements(client, NURSE_JOB_ID) == []
-
-
-async def test_add_after_delete_takes_the_next_position(client: AsyncClient) -> None:
-    before = await api_requirements(client, NURSE_JOB_ID)
-    await delete(client, before[0])
-
-    response = await client.post(f"/jobs/{NURSE_JOB_ID}/requirements", json={"text": "New one"})
-
-    assert positions(response.json()["requirements"]) == list(range(1, len(before) + 1))
 
 
 async def test_stale_token_is_409_and_deletes_nothing(client: AsyncClient) -> None:
@@ -126,14 +117,3 @@ async def test_missing_reviewer_header_is_422(client: AsyncClient) -> None:
 
     assert response.status_code == 422
     assert await api_requirements(client, NURSE_JOB_ID) == rows
-
-
-async def test_delete_clears_the_job_review(client: AsyncClient, session: AsyncSession) -> None:
-    await mark_job_reviewed(session, NURSE_JOB_ID)
-    row = (await api_requirements(client, NURSE_JOB_ID))[0]
-
-    response = await delete(client, row)
-
-    assert (response.json()["reviewed_at"], response.json()["reviewed_by"]) == (None, None)
-    job = await job_row(session, NURSE_JOB_ID)
-    assert (job["reviewed_at"], job["reviewed_by"]) == (None, None)

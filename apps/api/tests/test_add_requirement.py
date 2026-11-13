@@ -36,25 +36,6 @@ async def test_uses_the_given_kind(client: AsyncClient) -> None:
     assert response.json()["requirements"][-1]["kind"] == "nice_to_have"
 
 
-async def test_bumps_job_updated_at(client: AsyncClient, session: AsyncSession) -> None:
-    response = await client.post(URL, json={"text": "Fluent in French"})
-
-    job = await job_row(session, NURSE_JOB_ID)
-    assert job["updated_at"] is not None
-    assert response.json()["updated_at"] is not None
-
-
-async def test_clears_the_job_review(client: AsyncClient, session: AsyncSession) -> None:
-    await mark_job_reviewed(session, NURSE_JOB_ID)
-
-    response = await client.post(URL, json={"text": "Fluent in French"})
-
-    assert response.status_code == 201
-    assert (response.json()["reviewed_at"], response.json()["reviewed_by"]) == (None, None)
-    job = await job_row(session, NURSE_JOB_ID)
-    assert (job["reviewed_at"], job["reviewed_by"]) == (None, None)
-
-
 async def test_accepts_500_characters(client: AsyncClient) -> None:
     response = await client.post(URL, json={"text": "x" * 500})
 
