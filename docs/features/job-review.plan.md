@@ -72,7 +72,7 @@ Recorded in the atlas `decisions` collection. Defaults already taken (status `de
 | D2 | API tests run against the Docker DB. Each test runs in an outer transaction that is rolled back; the session uses `join_transaction_mode="create_savepoint"` so app commits stay inside it. | Real Postgres behaviour (locks, deferrable unique, check constraints) with no leftover data. `just check` needs `docker compose up -d`. |
 | D3 | API: SQLAlchemy 2.0 typed ORM models for the two tables, explicit `select … for update` / bulk `update` statements for locking and renumbering, Pydantic v2 schemas, code in `screening/review/`. | Readable models; the tricky writes stay visible as SQL. |
 | D4 | Web: no data-fetching library. One `useReducer` store plus a per-requirement promise queue. | The per-row ordering and draft rules are custom; a cache library would fight them. |
-| D5 | Web UI: **shadcn/ui** (Radix primitives + Tailwind CSS v4), components generated into `apps/web/components/ui/`, icons from `lucide-react`, toasts via shadcn's Sonner. No hand-rolled CSS for things a shadcn component covers. Dates via `Intl.DateTimeFormat`. See the component map under JR-15. | User requirement. Accessible primitives (toggle group, buttons, inputs with `aria-invalid` styling) out of the box. |
+| D5 | Web UI: **shadcn/ui** (Radix primitives + Tailwind CSS v4), components generated into `apps/web/components/ui/`, icons from `lucide-react`, toasts via shadcn's Sonner. No hand-rolled CSS for things a shadcn component covers. Dates via `Intl.DateTimeFormat`. See the component map under JR-15. Radix base, `radix-nova` style; dark mode follows `prefers-color-scheme`. | User requirement. Accessible primitives (toggle group, buttons, inputs with `aria-invalid` styling) out of the box. |
 | D6 | `X-Reviewer-Name` is required on writes only. | GET is not a write (BR-13). |
 | D7 | Approving the job does not touch `jobs.updated_at`. | BR-2 counts requirement writes only. |
 
@@ -242,9 +242,9 @@ JIT:
 - `verify` Read the current shadcn install guide for Next.js (ui.shadcn.com/docs/installation/next)
   and confirm it supports Next 16, React 19 and Tailwind v4. Read the CSS/PostCSS page in
   `apps/web/node_modules/next/dist/docs`. If they disagree with this plan, log it and ask.
-- `install` From `apps/web`: `pnpm dlx shadcn@latest init` (style and base colour: take the
-  defaults unless the user says otherwise). Check it installed into `apps/web`, not the
-  workspace root.
+- `install` From `apps/web`: `pnpm dlx shadcn@latest init -b radix --preset nova`. Since July
+  2026 the bare `init` uses Base UI, not Radix; the user kept Radix (D5). Check it installed
+  into `apps/web`, not the workspace root.
 - `install` `pnpm dlx shadcn@latest add button input badge card toggle-group sonner alert skeleton`.
   Check what extra packages it pulls in (e.g. the Sonner wrapper imports `next-themes`). Keep them
   or simplify the wrapper, and say which in the PR.
