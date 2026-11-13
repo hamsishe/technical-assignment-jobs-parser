@@ -10,3 +10,5 @@ build/
 .DS_Store
 *.egg-info/
 tsconfig.tsbuildinfo
+.pytest_cache/
+.ruff_cache/

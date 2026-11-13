@@ -29,3 +29,24 @@ stop:
 # Open a psql prompt against the seeded database.
 psql:
     docker compose exec db psql -U app -d screening
+
+# Lint, format check and type check both apps.
+lint:
+    uv run --project apps/api ruff check apps/api
+    uv run --project apps/api ruff format --check apps/api
+    pnpm --filter web lint
+    pnpm --filter web typecheck
+
+# Apply safe lint fixes and formatting.
+fix:
+    uv run --project apps/api ruff check --fix apps/api
+    uv run --project apps/api ruff format apps/api
+    pnpm --filter web exec eslint . --fix
+
+# Run both test suites.
+test:
+    uv run --project apps/api pytest apps/api
+    pnpm --filter web test
+
+# The gate: must pass before a change is done or committed.
+check: lint test

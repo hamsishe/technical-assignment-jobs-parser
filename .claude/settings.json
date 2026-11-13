@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate.sh",
+            "timeout": 300,
+            "statusMessage": "Running gate (just check)..."
+          }
+        ]
+      }
+    ]
+  }
+}
