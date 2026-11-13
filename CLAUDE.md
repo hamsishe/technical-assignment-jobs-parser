@@ -15,6 +15,14 @@ Requirements review tool: a recruiter corrects machine-extracted job requirement
 - Every behavior change ships with a test. API: `apps/api/tests`, via `httpx.AsyncClient` + `ASGITransport`. Web: `*.test.tsx` next to the code, with `fetch` stubbed.
 - Keep `NOTES.md` current: time spent, key choices and why, next steps.
 
+## Feature work: Job Review
+
+Plan: `docs/features/job-review.plan.md` (tasks JR-0..JR-15, JIT gates, session protocol). Web UI uses shadcn/ui (component map in
+JR-15). Live
+status, open questions and time spent: the atlas at <https://claude.ai/artifact/Rktd7N1KwFZ1k9zzxRy9qi>,
+read and written with the `ArtifactData` tool. Before starting work, read the atlas and claim a
+task; when you stop, update it. Use the task id as the ticket in branch and PR names.
+
 ## Gate
 
 `just check` (lint, types, tests for both apps) must pass before work is done or committed. Run `just fix` for auto-fixable issues.
