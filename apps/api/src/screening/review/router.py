@@ -2,7 +2,8 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
+from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from screening.db import get_session
@@ -38,4 +39,20 @@ async def patch_requirement(
     session: AsyncSession = Depends(get_session),
 ) -> JobOut:
     change = service.patch_requirement(session, requirement_id, body, reviewer=reviewer)
+    return await service.write_requirements(session, job_id, change)
+
+
+# A delete stores no name, but every write must carry the reviewer header (BR-13).
+@router.delete("/{job_id}/requirements/{requirement_id}", dependencies=[Depends(reviewer_name)])
+async def delete_requirement(
+    job_id: UUID,
+    requirement_id: UUID,
+    expected_updated_at: AwareDatetime = Query(
+        description="The requirement's updated_at as last read. URL-encode it: '+' in an offset."
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> JobOut:
+    change = service.delete_requirement(
+        session, requirement_id, expected_updated_at=expected_updated_at
+    )
     return await service.write_requirements(session, job_id, change)

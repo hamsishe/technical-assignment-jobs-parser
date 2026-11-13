@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import status
-from sqlalchemy import exists, func, insert, select, update
+from sqlalchemy import delete, exists, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from screening.review.errors import (
@@ -193,6 +193,28 @@ def patch_requirement(
             update(Requirement)
             .where(Requirement.id == current.id)
             .values(**values, updated_at=func.clock_timestamp(), updated_by=reviewer)
+        )
+        return True
+
+    return change
+
+
+def delete_requirement(
+    session: AsyncSession, requirement_id: UUID, *, expected_updated_at: datetime
+) -> RequirementChange:
+    """Delete a requirement and move the ones after it up by one, keeping 1..n (BR-7).
+
+    The position constraint is deferred to commit, so the shift cannot trip over itself.
+    No minimum count here: BR-9 is checked only when the job is approved.
+    """
+
+    async def change(job: Job) -> bool:
+        current = await load_current_requirement(session, job, requirement_id, expected_updated_at)
+        await session.execute(delete(Requirement).where(Requirement.id == current.id))
+        await session.execute(
+            update(Requirement)
+            .where(Requirement.job_id == job.id, Requirement.position > current.position)
+            .values(position=Requirement.position - 1)
         )
         return True
 
