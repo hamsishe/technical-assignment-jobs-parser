@@ -6,7 +6,15 @@
 // synchronously when the next request leaves. React state seen through a ref lags a
 // commit, and a lagging token turns a chained edit into a 409.
 
-import { ApiError, deleteRequirement, getJob, isTransient, patchRequirement } from "./api";
+import {
+  ApiError,
+  addRequirement,
+  approveJob,
+  deleteRequirement,
+  getJob,
+  isTransient,
+  patchRequirement,
+} from "./api";
 import { notify } from "./notify";
 import type { Job, Kind, Requirement, RequirementChanges } from "./types";
 
@@ -45,6 +53,10 @@ export type RowStatus = "idle" | "saving" | "failed" | "invalid";
 export interface ReviewState {
   job: Job;
   rows: Readonly<Record<string, RowState>>;
+  /** Add and approve-job requests in flight (they belong to no single row). */
+  jobPending: number;
+  /** A write in this session cleared the job's review (BR-4): say why it is not reviewed. */
+  reviewCleared: boolean;
 }
 
 export type Action =
@@ -55,7 +67,10 @@ export type Action =
   | { type: "sent"; id: string; op: number; text?: string; overlay?: Omit<Overlay, "op"> }
   | { type: "saved"; id: string; op: number; job: Job; text?: string }
   | { type: "failed"; id: string; op: number; text?: string; failure?: RowFailure; error?: string }
-  | { type: "reloaded"; job: Job };
+  | { type: "reloaded"; job: Job }
+  | { type: "jobSent" }
+  | { type: "jobSaved"; job: Job }
+  | { type: "jobFailed" };
 
 const EMPTY_ROW: RowState = {
   draft: null,
@@ -67,7 +82,7 @@ const EMPTY_ROW: RowState = {
 };
 
 export function initialState(job: Job): ReviewState {
-  return { job, rows: {} };
+  return { job, rows: {}, jobPending: 0, reviewCleared: false };
 }
 
 export function rowState(state: ReviewState, id: string): RowState {
@@ -77,7 +92,7 @@ export function rowState(state: ReviewState, id: string): RowState {
 export function reduce(state: ReviewState, action: Action): ReviewState {
   switch (action.type) {
     case "payload":
-      return { ...state, job: newer(state.job, action.job) };
+      return acceptJob(state, action.job);
 
     case "draft": {
       const row = rowState(state, action.id);
@@ -121,8 +136,7 @@ export function reduce(state: ReviewState, action: Action): ReviewState {
       // The draft is done only if it still says what was saved; the user may have typed on.
       const draftSaved =
         action.text !== undefined && row.draft !== null && row.draft.trim() === action.text;
-      const next = { ...state, job: newer(state.job, action.job) };
-      return withRow(next, action.id, { ...row, draft: draftSaved ? null : row.draft });
+      return withRow(acceptJob(state, action.job), action.id, { ...row, draft: draftSaved ? null : row.draft });
     }
 
     case "failed": {
@@ -145,8 +159,17 @@ export function reduce(state: ReviewState, action: Action): ReviewState {
           row.failure === "stale" ? { ...row, draft: null, error: null, failure: null } : row,
         ]),
       );
-      return { job: newer(state.job, action.job), rows };
+      return acceptJob({ ...state, rows }, action.job);
     }
+
+    case "jobSent":
+      return { ...state, jobPending: state.jobPending + 1 };
+
+    case "jobSaved":
+      return acceptJob({ ...state, jobPending: state.jobPending - 1 }, action.job);
+
+    case "jobFailed":
+      return { ...state, jobPending: state.jobPending - 1 };
   }
 }
 
@@ -177,13 +200,20 @@ function expectedText(state: ReviewState, id: string): string | undefined {
 }
 
 /**
- * Keep whichever payload is newer. Every write bumps `jobs.updated_at` under the job
- * lock (D1), so a payload with an older stamp was overtaken by one we already hold:
- * applying it would roll back another row's newer token. Equal stamps (approve job,
- * no-op PATCH) take the later arrival.
+ * Take a server payload if it is not older than the one held. Every write bumps
+ * `jobs.updated_at` under the job lock (D1), so a payload with an older stamp was
+ * overtaken by one we already hold: applying it would roll back another row's newer
+ * token. Equal stamps (approve job, no-op PATCH) take the later arrival.
  */
-function newer(current: Job, incoming: Job): Job {
-  return compareTimestamps(incoming.updated_at, current.updated_at) >= 0 ? incoming : current;
+function acceptJob(state: ReviewState, incoming: Job): ReviewState {
+  if (compareTimestamps(incoming.updated_at, state.job.updated_at) < 0) return state;
+  const wasReviewed = state.job.reviewed_at !== null;
+  const isReviewed = incoming.reviewed_at !== null;
+  return {
+    ...state,
+    job: incoming,
+    reviewCleared: isReviewed ? false : state.reviewCleared || wasReviewed,
+  };
 }
 
 const TIMESTAMP = /^(.*T\d\d:\d\d:\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/;
@@ -255,7 +285,7 @@ export type SaveStatus =
 
 /** Header save status: "Saving…" / "All changes saved" / "N changes not saved". */
 export function saveStatus(state: ReviewState): SaveStatus {
-  if (Object.values(state.rows).some((row) => row.pending > 0)) return { kind: "saving" };
+  if (isSaving(state)) return { kind: "saving" };
   const count = currentRows(state).filter((row) => {
     const status = rowStatus(row);
     return status === "failed" || status === "invalid";
@@ -269,9 +299,43 @@ export function saveStatus(state: ReviewState): SaveStatus {
  */
 export function hasUnsavedWork(state: ReviewState): boolean {
   return (
-    Object.values(state.rows).some((row) => row.pending > 0) ||
+    isSaving(state) ||
     currentRows(state).some((row) => row.draft !== null || row.failure !== null || row.error !== null)
   );
+}
+
+function isSaving(state: ReviewState): boolean {
+  return state.jobPending > 0 || Object.values(state.rows).some((row) => row.pending > 0);
+}
+
+export const MIN_REQUIREMENTS = 3;
+
+/**
+ * Why Approve job is disabled, or null when it can be clicked (BR-9 plus spec §6:
+ * nothing pending, failed or invalid). Unsaved drafts count as not saved: the job must
+ * be approved against what is on the server.
+ */
+export function approveJobBlocker(state: ReviewState): string | null {
+  if (state.job.reviewed_at !== null) return "Already approved.";
+  if (isSaving(state)) return "Wait until changes are saved.";
+
+  const rows = currentRows(state);
+  if (rows.some((row) => row.error !== null)) return "Fix the highlighted requirement first.";
+  if (rows.some((row) => row.failure !== null || row.draft !== null)) {
+    return "Some changes are not saved.";
+  }
+
+  const requirements = state.job.requirements;
+  if (requirements.length < MIN_REQUIREMENTS) {
+    return `Needs at least ${MIN_REQUIREMENTS} requirements (has ${requirements.length}).`;
+  }
+  const unapproved = requirements.filter((r) => r.reviewed_at === null).length;
+  if (unapproved > 0) {
+    return unapproved === 1
+      ? "1 requirement is not approved yet."
+      : `${unapproved} requirements are not approved yet.`;
+  }
+  return null;
 }
 
 /** Row state for requirements that still exist (a row deleted elsewhere has nothing to save). */
@@ -447,6 +511,51 @@ export function createReviewStore(initialJob: Job) {
         overlay: { deleted: true },
         retry: () => store.remove(id),
       });
+    },
+
+    /**
+     * Add a requirement (created approved, last position). Resolves to whether it was
+     * saved, so the form clears only on success; a rejection message is for the form.
+     */
+    async add(text: string, kind: Kind): Promise<{ saved: true } | { saved: false; error?: string }> {
+      dispatch({ type: "jobSent" });
+      try {
+        dispatch({ type: "jobSaved", job: await addRequirement(jobId, { text, kind }) });
+        notify.dismiss("add");
+        return { saved: true };
+      } catch (error) {
+        dispatch({ type: "jobFailed" });
+        if (isTransient(error)) {
+          // The text stays in the form; Add is the retry.
+          notify.error("Couldn't add the requirement. Check your connection.", { id: "add" });
+          return { saved: false };
+        }
+        return { saved: false, error: error instanceof Error ? error.message : "Couldn't add." };
+      }
+    },
+
+    /** Mark the job reviewed (BR-9). The button is disabled while approveJobBlocker says why. */
+    async approveJob() {
+      dispatch({ type: "jobSent" });
+      try {
+        dispatch({ type: "jobSaved", job: await approveJob(jobId) });
+        notify.dismiss("approve-job");
+      } catch (error) {
+        dispatch({ type: "jobFailed" });
+        if (isTransient(error)) {
+          notify.error("Couldn't approve the job. Check your connection.", {
+            id: "approve-job",
+            action: { label: "Retry", onClick: () => void store.approveJob() },
+          });
+        } else {
+          // 409 too_few_requirements / not_all_approved: the list changed elsewhere.
+          const message = error instanceof Error ? error.message : "Couldn't approve the job.";
+          notify.error(message, {
+            id: "approve-job",
+            action: { label: "Reload", onClick: () => void store.reload() },
+          });
+        }
+      }
     },
 
     /** Refetch the job (Q5: the conflicting row drops its draft, other rows keep theirs). */

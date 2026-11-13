@@ -1,9 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { screen, within } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { Toaster } from "@/components/ui/sonner";
 import { REVIEWER_NAME } from "@/lib/review/api";
 import {
   JOB_ID,
@@ -16,7 +14,7 @@ import {
 } from "@/lib/review/test-fixtures";
 import type { Job } from "@/lib/review/types";
 
-import { JobReview } from "./job-review";
+import { offline, renderReview, row, saveStatus, textbox } from "./testing";
 
 const T0 = "2026-11-13T10:00:00Z";
 const T1 = "2026-11-13T10:00:01.000001Z";
@@ -44,37 +42,6 @@ function makeReviewJob(): Job {
   });
 }
 
-/** Renders the page against a stubbed API: GET returns `job`, then each write gets the next answer. */
-async function renderReview(job: Job, ...answers: Array<Response | Error>) {
-  const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse(job));
-  for (const answer of answers) {
-    if (answer instanceof Error) fetchMock.mockRejectedValueOnce(answer);
-    else fetchMock.mockResolvedValueOnce(answer);
-  }
-  vi.stubGlobal("fetch", fetchMock);
-  const user = userEvent.setup();
-  render(
-    <>
-      <JobReview jobId={JOB_ID} />
-      <Toaster />
-    </>,
-  );
-  await screen.findByRole("banner");
-
-  const writes = () =>
-    fetchMock.mock.calls.slice(1).map(([url, init]) => ({
-      url: String(url),
-      method: init?.method,
-      headers: new Headers(init?.headers),
-      body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
-    }));
-  return { user, fetchMock, writes };
-}
-
-const row = (n: number) => screen.getByRole("group", { name: `Requirement ${n}` });
-const textbox = (n: number) => within(row(n)).getByRole("textbox", { name: "Requirement text" });
-const saveStatus = () => screen.getByRole("status", { name: "Save status" });
-const offline = () => new TypeError("Failed to fetch");
 
 test("blur with changed text sends a PATCH with the token and the reviewer header", async () => {
   const job = makeReviewJob();

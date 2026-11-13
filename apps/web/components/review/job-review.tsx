@@ -7,9 +7,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, getJob } from "@/lib/review/api";
-import { rowState, saveStatus, visibleRequirements } from "@/lib/review/store";
+import {
+  approveJobBlocker,
+  rowState,
+  saveStatus,
+  visibleRequirements,
+} from "@/lib/review/store";
 import type { Job } from "@/lib/review/types";
 
+import { AddRequirementForm } from "./add-requirement-form";
+import { ApproveJobButton } from "./approve-job-button";
 import { RequirementRow } from "./requirement-row";
 import { ReviewHeader } from "./review-header";
 import { useReviewStore } from "./use-review-store";
@@ -84,10 +91,18 @@ function ReviewPage({ initialJob }: { initialJob: Job }) {
   const requirements = visibleRequirements(state);
   const approved = requirements.filter((r) => r.approved).length;
   const progress = `${approved} of ${requirements.length} approved`;
+  const approveJob = (
+    <ApproveJobButton blocker={approveJobBlocker(state)} onApprove={() => void store.approveJob()} />
+  );
 
   return (
     <div className="flex min-h-svh flex-col">
-      <ReviewHeader job={job} saveStatus={saveStatus(state)} />
+      <ReviewHeader
+        job={job}
+        saveStatus={saveStatus(state)}
+        reviewCleared={state.reviewCleared}
+        action={approveJob}
+      />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6">
         <section aria-label="Job description">
@@ -112,12 +127,14 @@ function ReviewPage({ initialJob }: { initialJob: Job }) {
               </li>
             ))}
           </ol>
+          <AddRequirementForm add={store.add} />
         </section>
       </main>
 
       <footer className="sticky bottom-0 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
         <div className="mx-auto flex max-w-3xl items-center justify-end gap-3 px-4 py-3">
           <p className="text-sm">{progress}</p>
+          {approveJob}
         </div>
       </footer>
     </div>

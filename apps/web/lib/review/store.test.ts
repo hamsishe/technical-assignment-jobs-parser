@@ -2,6 +2,7 @@ import { type MockInstance, afterEach, beforeEach, expect, test, vi } from "vite
 
 import { notify } from "./notify";
 import {
+  approveJobBlocker,
   compareTimestamps,
   createReviewStore,
   hasUnsavedWork,
@@ -318,4 +319,48 @@ test("a stale row does not resend on blur; it waits for Reload", async () => {
 
   expect(api.fetchMock).toHaveBeenCalledOnce();
   expect(rowState(store.getState(), a.id).draft).toBe("Alpha 2");
+});
+
+test("Approve job waits for saves in flight and for unsaved drafts", async () => {
+  const approved = (r: ReturnType<typeof makeRequirement>) => ({ ...r, reviewed_at: T0 });
+  const job = makeJob({
+    updated_at: T0,
+    requirements: [1, 2, 3].map((position) =>
+      approved(makeRequirement({ position, text: `R${position}`, updated_at: T0 })),
+    ),
+  });
+  const [a] = job.requirements;
+  const store = createReviewStore(job);
+  const api = controlledFetch();
+  expect(approveJobBlocker(store.getState())).toBeNull();
+
+  store.setDraft(a.id, "R1 typed");
+  expect(approveJobBlocker(store.getState())).toBe("Some changes are not saved.");
+
+  store.saveText(a.id);
+  expect(approveJobBlocker(store.getState())).toBe("Wait until changes are saved.");
+
+  await settle();
+  api.respond(0, jsonResponse(written(job, T1, a.id, { text: "R1 typed" })));
+  await vi.waitFor(() => expect(approveJobBlocker(store.getState())).toBeNull());
+});
+
+test("a write that clears the review is flagged until the job is approved again", async () => {
+  const { a, job } = setup();
+  const reviewed = { ...job, reviewed_at: T0, reviewed_by: "Dana" };
+  const store = createReviewStore(reviewed);
+  const api = controlledFetch();
+  expect(store.getState().reviewCleared).toBe(false);
+
+  store.changeKind(a.id, "nice_to_have");
+  await settle();
+  api.respond(0, jsonResponse(written(job, T1, a.id, { kind: "nice_to_have" })));
+  await vi.waitFor(() => expect(store.getState().reviewCleared).toBe(true));
+
+  void store.approveJob();
+  await settle();
+  const again = { ...written(job, T1, a.id, { kind: "nice_to_have" }), reviewed_at: T2, reviewed_by: "Dana" };
+  api.respond(1, jsonResponse(again));
+  await vi.waitFor(() => expect(store.getState().reviewCleared).toBe(false));
+  expect(store.getState().job.reviewed_at).toBe(T2);
 });
