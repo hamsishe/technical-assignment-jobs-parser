@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { cn } from "@/lib/utils";
+
 type Check = { label: string; ok: boolean; detail: string };
 type Health = { api: string; database: string; jobs: number };
 
@@ -36,48 +38,42 @@ export default function Home() {
   }, []);
 
   return (
-    <main style={{ maxWidth: 560, margin: "0 auto", padding: "72px 24px" }}>
-      <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
-        Technical Check-in
-      </h1>
-      <p style={{ color: "var(--muted)", marginTop: 8 }}>
+    <main className="mx-auto max-w-[560px] px-6 py-18">
+      <h1 className="text-xl font-semibold">Technical Check-in</h1>
+      <p className="mt-2 text-muted-foreground">
         Nothing is built yet. That part is yours. This page only confirms the
         three pieces are running.
       </p>
 
-      <ul style={{ listStyle: "none", padding: 0, marginTop: 32 }}>
+      <ul className="mt-8">
         {checks === null ? (
-          <li style={{ color: "var(--muted)" }}>Checking…</li>
+          <li className="text-muted-foreground">Checking…</li>
         ) : (
           checks.map((c) => (
             <li
               key={c.label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 16,
-                padding: "12px 0",
-                borderBottom: "1px solid var(--line)",
-              }}
+              className="flex justify-between gap-4 border-b border-border py-3"
             >
               <span>
                 <span
-                  style={{
-                    color: c.ok ? "var(--ok)" : "var(--bad)",
-                    marginRight: 10,
-                  }}
+                  className={cn(
+                    "mr-2.5",
+                    c.ok
+                      ? "text-green-700 dark:text-green-500"
+                      : "text-destructive",
+                  )}
                 >
                   {c.ok ? "●" : "○"}
                 </span>
                 {c.label}
               </span>
-              <span style={{ color: "var(--muted)" }}>{c.detail}</span>
+              <span className="text-muted-foreground">{c.detail}</span>
             </li>
           ))
         )}
       </ul>
 
-      <p style={{ color: "var(--muted)", marginTop: 32, fontSize: 14 }}>
+      <p className="mt-8 text-sm text-muted-foreground">
         Read <code>README.md</code> for the task.
       </p>
     </main>
