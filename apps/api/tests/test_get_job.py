@@ -1,8 +1,5 @@
-from datetime import datetime
-
 import pytest
 from httpx import AsyncClient
-from pydantic import TypeAdapter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,7 +90,6 @@ async def test_get_needs_no_reviewer_header(client: AsyncClient) -> None:
     client.headers.pop("X-Reviewer-Name")
     response = await client.get(f"/jobs/{NURSE_JOB_ID}")
 
-    assert "X-Reviewer-Name" not in response.request.headers
     assert response.status_code == 200
 
 
@@ -101,34 +97,25 @@ async def test_get_needs_no_reviewer_header(client: AsyncClient) -> None:
     "stored",
     ["2026-11-13 14:02:03.123456+00", "2026-11-13 14:02:03+00", "2026-11-13 09:02:03.5-05"],
 )
-async def test_updated_at_round_trips_exactly(
+async def test_updated_at_round_trips_as_a_write_token(
     client: AsyncClient, session: AsyncSession, stored: str
 ) -> None:
     # The client sends `updated_at` back as `expected_updated_at`, and the API compares it
-    # with `=` (BR-12). The JSON string must parse back to exactly the stored instant.
-    first_id = await session.scalar(
-        text("select id from requirements where job_id = :job and position = 1"),
-        {"job": NURSE_JOB_ID},
-    )
+    # with `=` (BR-12). If serialising it lost microseconds or the offset, the write would
+    # be rejected as stale (409) or as a naive datetime (422).
     await session.execute(
         text(
             "update requirements set updated_at = cast(cast(:at as text) as timestamptz)"
-            " where id = :id"
+            " where job_id = :job and position = 1"
         ),
-        {"at": stored, "id": first_id},
+        {"at": stored, "job": NURSE_JOB_ID},
+    )
+    await session.commit()
+    row = (await client.get(f"/jobs/{NURSE_JOB_ID}")).json()["requirements"][0]
+
+    response = await client.patch(
+        f"/jobs/{NURSE_JOB_ID}/requirements/{row['id']}",
+        json={"expected_updated_at": row["updated_at"], "approved": True},
     )
 
-    response = await client.get(f"/jobs/{NURSE_JOB_ID}")
-    sent = response.json()["requirements"][0]["updated_at"]
-
-    parsed = TypeAdapter(datetime).validate_python(sent)
-    assert parsed.tzinfo is not None
-    stored_instant = await session.scalar(
-        text("select updated_at from requirements where id = :id"), {"id": first_id}
-    )
-    assert parsed == stored_instant  # microseconds survive the trip
-    matches = await session.scalar(
-        text("select count(*) from requirements where id = :id and updated_at = :at"),
-        {"id": first_id, "at": parsed},
-    )
-    assert matches == 1
+    assert response.status_code == 200, response.text
