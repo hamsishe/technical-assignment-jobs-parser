@@ -32,6 +32,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "ASYNC", "RUF"]
 
+[tool.ruff.lint.isort]
+# Test helpers live next to the tests (tests/seed.py, tests/helpers.py), imported as top-level modules.
+known-local-folder = ["seed", "helpers"]
+
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's dependency-injection markers are meant to be used as defaults.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
