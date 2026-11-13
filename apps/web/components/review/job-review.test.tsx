@@ -60,6 +60,9 @@ test("renders the header, the description, the rows in order, origin tags and qu
   );
   expect(within(header).getByText("Not reviewed")).toBeInTheDocument();
   expect(within(header).getByText(/^Last change 13 Nov 2026, \d\d:\d\d$/)).toBeInTheDocument();
+  expect(within(header).getByRole("status", { name: "Save status" })).toHaveTextContent(
+    "All changes saved",
+  );
 
   const main = screen.getByRole("main");
   expect(within(main).getByText(job.description)).toBeInTheDocument();
@@ -134,10 +137,10 @@ test("shows a loading state until the job arrives", async () => {
 
   render(<JobReview jobId={JOB_ID} />);
 
-  expect(screen.getByRole("status")).toHaveTextContent("Loading job…");
+  expect(screen.getByText("Loading job…")).toBeInTheDocument();
   resolve(jsonResponse(makeJob()));
   expect(await screen.findByRole("banner")).toBeInTheDocument();
-  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(screen.queryByText("Loading job…")).not.toBeInTheDocument();
 });
 
 test("shows 'Job not found' on 404", async () => {

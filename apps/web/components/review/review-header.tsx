@@ -1,9 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/review/format";
+import type { SaveStatus } from "@/lib/review/store";
 import type { Job } from "@/lib/review/types";
+import { cn } from "@/lib/utils";
 
-/** Sticky header: title, location, review status and the last change (spec §6). */
-export function ReviewHeader({ job }: { job: Job }) {
+/** Sticky header: title, location, review status, last change and save status (spec §6). */
+export function ReviewHeader({ job, saveStatus }: { job: Job; saveStatus: SaveStatus }) {
   return (
     <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
       <div className="mx-auto flex max-w-3xl flex-col gap-1 px-4 py-3">
@@ -14,9 +16,13 @@ export function ReviewHeader({ job }: { job: Job }) {
           <ReviewStatus job={job} />
         </div>
         <p className="text-sm text-muted-foreground">
-          {job.updated_at === null
-            ? "No changes yet"
-            : `Last change ${formatDateTime(job.updated_at)}`}
+          <span>
+            {job.updated_at === null
+              ? "No changes yet"
+              : `Last change ${formatDateTime(job.updated_at)}`}
+          </span>
+          {" · "}
+          <SaveStatusText status={saveStatus} />
         </p>
       </div>
     </header>
@@ -32,4 +38,27 @@ function ReviewStatus({ job }: { job: Job }) {
       Reviewed by {job.reviewed_by} · {formatDateTime(job.reviewed_at)}
     </Badge>
   );
+}
+
+function SaveStatusText({ status }: { status: SaveStatus }) {
+  return (
+    <span
+      role="status"
+      aria-label="Save status"
+      className={cn(status.kind === "unsaved" && "font-medium text-destructive")}
+    >
+      {saveStatusText(status)}
+    </span>
+  );
+}
+
+export function saveStatusText(status: SaveStatus): string {
+  switch (status.kind) {
+    case "saving":
+      return "Saving…";
+    case "saved":
+      return "All changes saved";
+    case "unsaved":
+      return status.count === 1 ? "1 change not saved" : `${status.count} changes not saved`;
+  }
 }

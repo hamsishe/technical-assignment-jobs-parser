@@ -7,10 +7,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, getJob } from "@/lib/review/api";
+import { saveStatus } from "@/lib/review/store";
 import type { Job } from "@/lib/review/types";
 
 import { RequirementRow } from "./requirement-row";
 import { ReviewHeader } from "./review-header";
+import { useReviewStore } from "./use-review-store";
 
 type LoadState =
   | { status: "loading" }
@@ -72,18 +74,20 @@ export function JobReview({ jobId }: { jobId: string }) {
         </PageMessage>
       );
     case "ready":
-      return <ReviewPage job={state.job} />;
+      return <ReviewPage initialJob={state.job} />;
   }
 }
 
-function ReviewPage({ job }: { job: Job }) {
+function ReviewPage({ initialJob }: { initialJob: Job }) {
+  const [state] = useReviewStore(initialJob);
+  const { job } = state;
   const requirements = job.requirements.toSorted((a, b) => a.position - b.position);
   const approved = requirements.filter((r) => r.reviewed_at !== null).length;
   const progress = `${approved} of ${requirements.length} approved`;
 
   return (
     <div className="flex min-h-svh flex-col">
-      <ReviewHeader job={job} />
+      <ReviewHeader job={job} saveStatus={saveStatus(state)} />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6">
         <section aria-label="Job description">
