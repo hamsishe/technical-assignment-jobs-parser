@@ -47,3 +47,18 @@ async def api_requirements(client: AsyncClient, job_id: UUID) -> list[dict[str, 
 
 def find(job: dict[str, Any], requirement_id: str) -> dict[str, Any]:
     return next(r for r in job["requirements"] if r["id"] == requirement_id)
+
+
+async def approve_all_requirements(session: AsyncSession, job_id: UUID) -> None:
+    await session.execute(
+        text("update requirements set reviewed_at = now() where job_id = :job"), {"job": job_id}
+    )
+    await session.commit()
+
+
+async def keep_first_requirements(session: AsyncSession, job_id: UUID, count: int) -> None:
+    await session.execute(
+        text("delete from requirements where job_id = :job and position > :count"),
+        {"job": job_id, "count": count},
+    )
+    await session.commit()

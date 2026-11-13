@@ -56,3 +56,12 @@ async def delete_requirement(
         session, requirement_id, expected_updated_at=expected_updated_at
     )
     return await service.write_requirements(session, job_id, change)
+
+
+@router.post("/{job_id}/review")
+async def approve_job(
+    job_id: UUID,
+    reviewer: str = Depends(reviewer_name),
+    session: AsyncSession = Depends(get_session),
+) -> JobOut:
+    return await service.approve_job(session, job_id, reviewer=reviewer)

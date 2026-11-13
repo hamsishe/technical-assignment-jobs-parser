@@ -69,28 +69,43 @@ async def lock_job(session: AsyncSession, job_id: UUID) -> Job:
     return job
 
 
-async def write_requirements(
-    session: AsyncSession, job_id: UUID, change: RequirementChange
+async def run_locked(
+    session: AsyncSession, job_id: UUID, work: Callable[[Job], Awaitable[None]]
 ) -> JobOut:
-    """Run one requirement write as a single transaction and return the new payload.
+    """Run `work` as one transaction with the job row locked, and return the new payload.
 
-    Locks the job, applies `change`, and if it wrote anything stamps `jobs.updated_at` (BR-2)
-    and clears the job's review (BR-4). Any error rolls the whole thing back.
+    The payload is read inside the transaction, so it is exactly what was committed. Any
+    error rolls everything back.
     """
     try:
         job = await lock_job(session, job_id)
-        if await change(job):
-            await session.execute(
-                update(Job)
-                .where(Job.id == job_id)
-                .values(updated_at=func.clock_timestamp(), reviewed_at=None, reviewed_by=None)
-            )
+        await work(job)
         payload = await load_job_payload(session, job_id)
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     return payload
+
+
+async def write_requirements(
+    session: AsyncSession, job_id: UUID, change: RequirementChange
+) -> JobOut:
+    """Run one requirement write and return the new payload.
+
+    If `change` wrote anything, also stamps `jobs.updated_at` (BR-2) and clears the job's
+    review (BR-4) in the same transaction.
+    """
+
+    async def work(job: Job) -> None:
+        if await change(job):
+            await session.execute(
+                update(Job)
+                .where(Job.id == job.id)
+                .values(updated_at=func.clock_timestamp(), reviewed_at=None, reviewed_by=None)
+            )
+
+    return await run_locked(session, job_id, work)
 
 
 async def ensure_unique_text(
@@ -219,3 +234,47 @@ def delete_requirement(
         return True
 
     return change
+
+
+MIN_REQUIREMENTS_TO_APPROVE = 3
+
+
+async def approve_job(session: AsyncSession, job_id: UUID, *, reviewer: str) -> JobOut:
+    """Mark the job reviewed (BR-3), if it has >= 3 requirements, all approved (BR-9).
+
+    Runs under the job lock, so no requirement write can slip in between the check and the
+    stamp. Does not touch `jobs.updated_at`, which counts requirement writes only (D7).
+    Approving an already reviewed job keeps the original reviewer and time (Q2): any
+    requirement write since would have cleared the review, so the rules still hold.
+    """
+
+    async def work(job: Job) -> None:
+        if job.reviewed_at is not None:
+            return
+        total, approved = (
+            await session.execute(
+                select(func.count(), func.count(Requirement.reviewed_at)).where(
+                    Requirement.job_id == job.id
+                )
+            )
+        ).one()
+        if total < MIN_REQUIREMENTS_TO_APPROVE:
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "too_few_requirements",
+                f"A job needs at least {MIN_REQUIREMENTS_TO_APPROVE} requirements to be "
+                f"approved. It has {total}.",
+            )
+        if approved < total:
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "not_all_approved",
+                f"Approve every requirement first. {total - approved} of {total} not approved.",
+            )
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id)
+            .values(reviewed_at=func.clock_timestamp(), reviewed_by=reviewer)
+        )
+
+    return await run_locked(session, job_id, work)

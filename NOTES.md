@@ -28,7 +28,18 @@ Why the schema changed, per the Job Review spec (§4):
 - **API tests run against the real Docker Postgres**, each inside an outer transaction that is
   rolled back; the app session joins it with `join_transaction_mode="create_savepoint"`. Locks,
   deferred constraints and check constraints behave as in production, and no test data is left
-  behind. `just check` therefore needs `docker compose up -d`.
+  behind. `just check` therefore needs `docker compose up -d`. Each request gets its own session
+  on the test's connection, so an API rollback never undoes a test's setup.
+- **One write path.** Every requirement write goes through `write_requirements` in
+  `screening/review/service.py`: lock the job row (`select … for update`), apply the change, stamp
+  `jobs.updated_at` and clear the job review, read the payload, commit. Writes to one job are
+  serialised, so positions cannot collide and approving the job cannot race an edit.
+- **Optimistic concurrency on `requirements.updated_at`.** PATCH and DELETE send the value they
+  read; a mismatch is 409 `stale`. Values are stamped with `clock_timestamp()` and compared
+  exactly; they round-trip through JSON with microseconds intact.
+- **Decided with the user:** a PATCH that changes nothing is a no-op (no bump, review kept, 200);
+  approving an already reviewed job is an idempotent 200 that keeps the original reviewer;
+  duplicate text is an API check only (no DB index).
 
 ## Next steps
 
