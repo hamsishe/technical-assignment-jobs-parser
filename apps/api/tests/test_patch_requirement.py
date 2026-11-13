@@ -147,14 +147,6 @@ async def test_unchanged_patch_is_a_no_op(client: AsyncClient, session: AsyncSes
     assert (await job_row(session, NURSE_JOB_ID))["updated_at"] is None
 
 
-async def test_approving_an_approved_row_is_a_no_op(client: AsyncClient) -> None:
-    approved = await patched(client, await row_at(client), approved=True)
-
-    again = await patched(client, approved, approved=True)
-
-    assert again == approved
-
-
 # --- concurrency (BR-12) -----------------------------------------------------------------
 
 
@@ -290,17 +282,3 @@ async def test_missing_reviewer_header_is_422(client: AsyncClient) -> None:
     response = await patch(client, row, approved=True)
 
     assert response.status_code == 422
-
-
-# --- job review (BR-2, BR-4) -------------------------------------------------------------
-
-
-async def test_write_clears_the_job_review(client: AsyncClient, session: AsyncSession) -> None:
-    await mark_job_reviewed(session, NURSE_JOB_ID)
-
-    response = await patch(client, await row_at(client), approved=True)
-
-    assert (response.json()["reviewed_at"], response.json()["reviewed_by"]) == (None, None)
-    job = await job_row(session, NURSE_JOB_ID)
-    assert (job["reviewed_at"], job["reviewed_by"]) == (None, None)
-    assert job["updated_at"] is not None

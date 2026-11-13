@@ -10,10 +10,12 @@ bound to the event loop that opened them, and pytest-asyncio gives each test a
 new loop.
 """
 
+import asyncio
 from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -21,6 +23,38 @@ from screening.db import DATABASE_URL, get_session
 from screening.main import app
 
 from helpers import REVIEWER
+
+
+async def seed_is_untouched() -> bool:
+    """True if no recruiter write has happened since db/02-seed.sql was loaded.
+
+    Every write stamps one of these columns, deletes included (they set jobs.updated_at).
+    """
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            touched = await conn.scalar(
+                text(
+                    "select exists (select 1 from jobs"
+                    "  where updated_at is not null or reviewed_at is not null)"
+                    " or exists (select 1 from requirements"
+                    "  where updated_by is not null or reviewed_at is not null)"
+                )
+            )
+    finally:
+        await engine.dispose()
+    return not touched
+
+
+@pytest.fixture(scope="session", autouse=True)
+def require_fresh_seed() -> None:
+    """Tests assume the seed as loaded. Using the app changes it, so stop with the fix
+    up front instead of failing dozens of tests on unexpected data."""
+    if not asyncio.run(seed_is_untouched()):
+        pytest.exit(
+            "The database has changed since it was seeded. Run `just reset`, then retry.",
+            returncode=1,
+        )
 
 
 def joined_session(connection: AsyncConnection) -> AsyncSession:
